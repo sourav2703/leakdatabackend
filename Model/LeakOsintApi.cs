@@ -8,3 +8,8 @@ public class SearchRequest
 
     public string Lang { get; set; } = "en";
 }
+
+public class CouponRequest
+{
+    public string Coupon { get; set; } = string.Empty;
+}

@@ -1,8 +1,34 @@
 [
   {
     "ContainingType": "LeakOsintApi.Controllers.SearchController",
+    "Method": "CheckCoupon",
+    "RelativePath": "api/Search/check-coupon",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "request",
+        "Type": "LeakOsintApi.Models.CouponRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "LeakOsintApi.Controllers.SearchController",
+    "Method": "GetCoupons",
+    "RelativePath": "api/Search/getcoupons",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "LeakOsintApi.Controllers.SearchController",
     "Method": "Search",
-    "RelativePath": "api/Search",
+    "RelativePath": "api/Search/search",
     "HttpMethod": "POST",
     "IsController": true,
     "Order": 0,

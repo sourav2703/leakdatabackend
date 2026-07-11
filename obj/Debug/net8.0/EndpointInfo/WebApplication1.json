@@ -5,7 +5,7 @@
     "version": "1.0"
   },
   "paths": {
-    "/api/Search": {
+    "/api/Search/search": {
       "post": {
         "tags": [
           "Search"
@@ -25,6 +25,49 @@
             "application/*+json": {
               "schema": {
                 "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/Search/getcoupons": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/Search/check-coupon": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponRequest"
               }
             }
           }
@@ -78,6 +121,16 @@
   },
   "components": {
     "schemas": {
+      "CouponRequest": {
+        "type": "object",
+        "properties": {
+          "coupon": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "SearchRequest": {
         "type": "object",
         "properties": {

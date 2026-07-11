@@ -33,3 +33,4 @@ E:\Practice\dataleaaka\WebApplication1\WebApplication1\obj\Debug\net8.0\refint\W
 E:\Practice\dataleaaka\WebApplication1\WebApplication1\obj\Debug\net8.0\WebApplication1.pdb
 E:\Practice\dataleaaka\WebApplication1\WebApplication1\obj\Debug\net8.0\WebApplication1.genruntimeconfig.cache
 E:\Practice\dataleaaka\WebApplication1\WebApplication1\obj\Debug\net8.0\ref\WebApplication1.dll
+E:\Practice\dataleaaka\WebApplication1\WebApplication1\obj\Debug\net8.0\WebApplication1.sourcelink.json
