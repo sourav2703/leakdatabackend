@@ -1,45 +1,229 @@
-﻿using System.Text;
+﻿using Microsoft.EntityFrameworkCore;
+using System.Text;
 using System.Text.Json;
+using YourApp.Models;
 
-namespace LeakOsintApi.Services;
-
-public class LeakOsintService
+namespace YourApp.Services
 {
-    private readonly HttpClient _httpClient;
-    private readonly IConfiguration _configuration;
-
-    public LeakOsintService(HttpClient httpClient,
-                            IConfiguration configuration)
+    public class LeakOsintService
     {
-        _httpClient = httpClient;
-        _configuration = configuration;
-    }
+        private readonly HttpClient _httpClient;
+        private readonly AppDbContext _dbContext;
+        private readonly ILogger<LeakOsintService> _logger;
+        private readonly string _token;
+        private readonly string _apiUrl;
 
-    public async Task<string> SearchAsync(string query,
-                                          int limit,
-                                          string lang)
-    {
-        var body = new
+        public LeakOsintService(
+            HttpClient httpClient,
+            AppDbContext dbContext,
+            IConfiguration configuration,
+            ILogger<LeakOsintService> logger)
         {
-            token = _configuration["LeakOsint:Token"],
-            request = query,
-            limit,
-            lang
-        };
+            _httpClient = httpClient;
+            _dbContext = dbContext;
+            _logger = logger;
+            _token = configuration["LeakOsint:Token"] ??
+                throw new InvalidOperationException("LeakOSINT token not configured");
+            _apiUrl = configuration["LeakOsint:ApiUrl"] ??
+                throw new InvalidOperationException("LeakOSINT API URL not configured");
+        }
 
-        var json = JsonSerializer.Serialize(body);
+        public async Task<object> SearchAndSaveAsync(string query, int limit = 100, string lang = "en")
+        {
+            // Use execution strategy with generic type
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
 
-        var content = new StringContent(
-            json,
-            Encoding.UTF8,
-            "application/json");
+            return await strategy.ExecuteAsync<object>(async () =>
+            {
+                await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
-        var response = await _httpClient.PostAsync(
-            _configuration["LeakOsint:ApiUrl"],
-            content);
+                try
+                {
+                    // Prepare request data as per LeakOSINT API documentation
+                    var requestData = new
+                    {
+                        token = _token,
+                        request = query,
+                        lang = lang,
+                    };
 
-        response.EnsureSuccessStatusCode();
+                    var jsonRequest = JsonSerializer.Serialize(requestData);
+                    var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
 
-        return await response.Content.ReadAsStringAsync();
+                    // POST request to LeakOSINT API
+                    var response = await _httpClient.PostAsync(_apiUrl, content);
+                    response.EnsureSuccessStatusCode();
+
+                    var jsonResponse = await response.Content.ReadAsStringAsync();
+                    var leakData = JsonSerializer.Deserialize<LeakOSINTResponse>(jsonResponse);
+
+                    // Check for errors
+                    if (leakData?.ErrorCode != null)
+                    {
+                        _logger.LogError("LeakOSINT API Error: {ErrorCode}", leakData.ErrorCode);
+                        return new { success = false, error = leakData.ErrorCode };
+                    }
+
+                    // Check if we have data
+                    if (leakData?.List == null || !leakData.List.Any())
+                    {
+                        _logger.LogWarning("No data found for query: {Query}", query);
+                        return new { success = false, message = "No results found" };
+                    }
+
+                    // Create and save Search
+                    var search = new Search
+                    {
+                        Query = query,
+                        Status = "completed",
+                        Limit = limit,
+                        Language = lang
+                    };
+
+                    await _dbContext.Searches.AddAsync(search);
+                    await _dbContext.SaveChangesAsync();
+
+                    // Process each database result
+                    foreach (var databaseEntry in leakData.List)
+                    {
+                        var databaseName = databaseEntry.Key;
+                        var databaseData = databaseEntry.Value;
+
+                        // Create Database entity
+                        var database = new Database
+                        {
+                            SearchId = search.Id,
+                            DatabaseName = databaseName,
+                            InfoLeak = databaseData.InfoLeak,
+                            RecordCount = databaseData.Data?.Count ?? 0
+                        };
+
+                        await _dbContext.Databases.AddAsync(database);
+                        await _dbContext.SaveChangesAsync();
+
+                        // Create Records
+                        if (databaseData.Data != null && databaseData.Data.Any())
+                        {
+                            var records = databaseData.Data.Select(record => new Record
+                            {
+                                DatabaseId = database.Id,
+                                RawData = JsonDocument.Parse(JsonSerializer.Serialize(record))
+                            });
+
+                            await _dbContext.Records.AddRangeAsync(records);
+                        }
+                    }
+
+                    await _dbContext.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    _logger.LogInformation("Successfully saved search results for: {Query}", query);
+
+                    return new
+                    {
+                        success = true,
+                        searchId = search.Id,
+                        data = leakData
+                    } as object;
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    _logger.LogError(ex, "Error processing LeakOSINT search for: {Query}", query);
+
+                    try
+                    {
+                        var errorSearch = new Search
+                        {
+                            Query = query,
+                            Status = "failed",
+                            ErrorMessage = ex.Message,
+                            Limit = limit,
+                            Language = lang
+                        };
+
+                        await _dbContext.Searches.AddAsync(errorSearch);
+                        await _dbContext.SaveChangesAsync();
+                    }
+                    catch (Exception dbEx)
+                    {
+                        _logger.LogError(dbEx, "Failed to log error to database");
+                    }
+
+                    throw;
+                }
+            });
+        }
+
+        public async Task<object> SearchMultipleAsync(List<string> queries, int limit = 100, string lang = "en")
+        {
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+
+            return await strategy.ExecuteAsync<object>(async () =>
+            {
+                await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+                try
+                {
+                    var combinedQuery = string.Join("\n", queries);
+
+                    var requestData = new
+                    {
+                        token = _token,
+                        request = combinedQuery,
+                        limit = limit,
+                        lang = lang,
+                        type = "json"
+                    };
+
+                    var jsonRequest = JsonSerializer.Serialize(requestData);
+                    var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
+
+                    var response = await _httpClient.PostAsync(_apiUrl, content);
+                    response.EnsureSuccessStatusCode();
+
+                    var jsonResponse = await response.Content.ReadAsStringAsync();
+                    var leakData = JsonSerializer.Deserialize<LeakOSINTResponse>(jsonResponse);
+
+                    if (leakData?.ErrorCode != null)
+                    {
+                        return new { success = false, error = leakData.ErrorCode } as object;
+                    }
+
+                    var results = new List<object>();
+                    foreach (var query in queries)
+                    {
+                        var search = new Search
+                        {
+                            Query = query,
+                            QueryType = "multiple",
+                            Status = "completed",
+                            Limit = limit,
+                            Language = lang
+                        };
+
+                        await _dbContext.Searches.AddAsync(search);
+                        await _dbContext.SaveChangesAsync();
+                        results.Add(new { query, searchId = search.Id });
+                    }
+
+                    await _dbContext.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    return new
+                    {
+                        success = true,
+                        results = results,
+                        data = leakData
+                    } as object;
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    _logger.LogError(ex, "Error processing multiple LeakOSINT searches");
+                    throw;
+                }
+            });
+        }
     }
 }

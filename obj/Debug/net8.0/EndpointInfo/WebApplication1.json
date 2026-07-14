@@ -5,10 +5,10 @@
     "version": "1.0"
   },
   "paths": {
-    "/api/Search/search": {
+    "/api/search": {
       "post": {
         "tags": [
-          "Search"
+          "Leak"
         ],
         "requestBody": {
           "content": {
@@ -36,10 +36,52 @@
         }
       }
     },
-    "/api/Search/getcoupons": {
+    "/api/search-multiple": {
+      "post": {
+        "tags": [
+          "Leak"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MultipleSearchRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MultipleSearchRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/MultipleSearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/history": {
       "get": {
         "tags": [
-          "Search"
+          "Leak"
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -48,30 +90,57 @@
         }
       }
     },
-    "/api/Search/check-coupon": {
-      "post": {
+    "/api/history/full": {
+      "get": {
         "tags": [
-          "Search"
+          "Leak"
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CouponRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CouponRequest"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/CouponRequest"
-              }
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50
             }
           }
-        },
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/result/{id}": {
+      "get": {
+        "tags": [
+          "Leak"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/stats": {
+      "get": {
+        "tags": [
+          "Leak"
+        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -121,10 +190,22 @@
   },
   "components": {
     "schemas": {
-      "CouponRequest": {
+      "MultipleSearchRequest": {
         "type": "object",
         "properties": {
-          "coupon": {
+          "queries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "lang": {
             "type": "string",
             "nullable": true
           }
@@ -138,9 +219,14 @@
             "type": "string",
             "nullable": true
           },
+          "queryType": {
+            "type": "string",
+            "nullable": true
+          },
           "limit": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           },
           "lang": {
             "type": "string",

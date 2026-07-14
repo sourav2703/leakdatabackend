@@ -1,44 +1,92 @@
 [
   {
-    "ContainingType": "LeakOsintApi.Controllers.SearchController",
-    "Method": "CheckCoupon",
-    "RelativePath": "api/Search/check-coupon",
-    "HttpMethod": "POST",
+    "ContainingType": "YourApp.Controllers.LeakController",
+    "Method": "GetHistory",
+    "RelativePath": "api/history",
+    "HttpMethod": "GET",
     "IsController": true,
     "Order": 0,
     "Parameters": [
       {
-        "Name": "request",
-        "Type": "LeakOsintApi.Models.CouponRequest",
+        "Name": "limit",
+        "Type": "System.Int32",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "YourApp.Controllers.LeakController",
+    "Method": "GetFullHistory",
+    "RelativePath": "api/history/full",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "limit",
+        "Type": "System.Int32",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "YourApp.Controllers.LeakController",
+    "Method": "GetSearchResult",
+    "RelativePath": "api/result/{id}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Int64",
         "IsRequired": true
       }
     ],
     "ReturnTypes": []
   },
   {
-    "ContainingType": "LeakOsintApi.Controllers.SearchController",
-    "Method": "GetCoupons",
-    "RelativePath": "api/Search/getcoupons",
+    "ContainingType": "YourApp.Controllers.LeakController",
+    "Method": "Search",
+    "RelativePath": "api/search",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "request",
+        "Type": "YourApp.Controllers.SearchRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "YourApp.Controllers.LeakController",
+    "Method": "SearchMultiple",
+    "RelativePath": "api/search-multiple",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "request",
+        "Type": "YourApp.Controllers.MultipleSearchRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "YourApp.Controllers.LeakController",
+    "Method": "GetStats",
+    "RelativePath": "api/stats",
     "HttpMethod": "GET",
     "IsController": true,
     "Order": 0,
     "Parameters": [],
-    "ReturnTypes": []
-  },
-  {
-    "ContainingType": "LeakOsintApi.Controllers.SearchController",
-    "Method": "Search",
-    "RelativePath": "api/Search/search",
-    "HttpMethod": "POST",
-    "IsController": true,
-    "Order": 0,
-    "Parameters": [
-      {
-        "Name": "request",
-        "Type": "LeakOsintApi.Models.SearchRequest",
-        "IsRequired": true
-      }
-    ],
     "ReturnTypes": []
   },
   {
