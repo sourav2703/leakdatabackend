@@ -1,101 +1,61 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using YourApp.Services;
-using System.Net;
-using System.Net.Sockets;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ============================================
-// FORCE IPv4 FOR ALL NETWORK CONNECTIONS
-// This is the critical fix for Render + Supabase
+// LOAD SECRETS FROM ENVIRONMENT VARIABLES
 // ============================================
-ServicePointManager.DnsRefreshTimeout = 0;
-AppContext.SetSwitch("System.Net.Dns.EnableDnsResolutionCache", false);
 
-// Try to pre-resolve and cache the IPv4 address
-string ipv4Host = null;
-try
-{
-    var hostEntry = Dns.GetHostEntry("db.wptsgoswwqoazcbbrkdh.supabase.co");
-    var ipv4Address = hostEntry.AddressList
-        .FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork);
+// Read from environment variables first, fallback to config
+var leakOsintToken = Environment.GetEnvironmentVariable("LEAKOSINT_TOKEN") ??
+                    builder.Configuration["LeakOsint:Token"];
 
-    if (ipv4Address != null)
-    {
-        ipv4Host = ipv4Address.ToString();
-        Console.WriteLine($"✅ Resolved IPv4 address: {ipv4Host}");
-    }
-    else
-    {
-        Console.WriteLine("⚠️ No IPv4 address found, will use hostname");
-    }
-}
-catch (Exception ex)
+var supabaseConnectionString = Environment.GetEnvironmentVariable("SUPABASE_CONNECTION_STRING") ??
+                               builder.Configuration.GetConnectionString("Supabase");
+
+// Build configuration
+var configuration = new ConfigurationBuilder()
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddEnvironmentVariables()
+    .Build();
+
+// Update connection string with environment variable if available
+if (!string.IsNullOrEmpty(supabaseConnectionString))
 {
-    Console.WriteLine($"⚠️ Failed to resolve IPv4: {ex.Message}");
+    // Replace placeholder or use directly
+    builder.Configuration["ConnectionStrings:Supabase"] = supabaseConnectionString;
 }
 
-// ============================================
-// BUILD CONNECTION STRING WITH IPv4
-// ============================================
-var originalConnectionString = builder.Configuration.GetConnectionString("Supabase") ??
-    throw new InvalidOperationException("Supabase connection string not configured");
-
-// If we have an IPv4 address, use it directly
-string connectionString;
-if (!string.IsNullOrEmpty(ipv4Host))
+if (!string.IsNullOrEmpty(leakOsintToken))
 {
-    // Replace the host with the IPv4 address
-    connectionString = originalConnectionString
-        .Replace("Host=db.wptsgoswwqoazcbbrkdh.supabase.co;", $"Host={ipv4Host};")
-        .Replace("Host=db.wptsgoswwqoazcbbrkdh.supabase.co", $"Host={ipv4Host}");
-
-    Console.WriteLine($"✅ Using IPv4 connection string");
-}
-else
-{
-    // Fallback: Try with different host patterns
-    connectionString = originalConnectionString;
-    Console.WriteLine($"⚠️ Using original connection string (may fail)");
+    builder.Configuration["LeakOsint:Token"] = leakOsintToken;
 }
 
-// Log the connection string (mask password)
-var maskedConnectionString = connectionString
-    .Replace($"Password={builder.Configuration.GetConnectionString("Supabase")?.Split(';').FirstOrDefault(s => s.Contains("Password="))?.Split('=')[1]}", "Password=***");
-Console.WriteLine($"📡 Connection string: {maskedConnectionString}");
-
 // ============================================
-// ADD SERVICES
+// REST OF YOUR PROGRAM.CS CODE
 // ============================================
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// ============================================
-// CONFIGURE DbContext WITH RETRY AND IPv4
-// ============================================
-builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
-{
+// Configure DbContext
+var connectionString = builder.Configuration.GetConnectionString("Supabase") ??
+    throw new InvalidOperationException("Supabase connection string not configured");
+
+builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString, npgsqlOptions =>
     {
-        // Enable retry for transient failures
         npgsqlOptions.EnableRetryOnFailure(
             maxRetryCount: 5,
             maxRetryDelay: TimeSpan.FromSeconds(30),
             errorCodesToAdd: null);
-
-        // Command timeout
         npgsqlOptions.CommandTimeout(60);
-
-        // Split query behavior for complex queries
         npgsqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
-    });
-});
+    }));
 
-// ============================================
-// CONFIGURE HTTP CLIENT
-// ============================================
+// Configure HttpClient
 builder.Services.AddHttpClient<LeakOsintService>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["LeakOsint:ApiUrl"] ?? "https://leakosintapi.com/");
@@ -103,9 +63,7 @@ builder.Services.AddHttpClient<LeakOsintService>(client =>
     client.Timeout = TimeSpan.FromMinutes(5);
 });
 
-// ============================================
-// CORS CONFIGURATION
-// ============================================
+// CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngularApp",
@@ -113,7 +71,7 @@ builder.Services.AddCors(options =>
         {
             policy.WithOrigins(
                 "http://localhost:4200",
-                "https://your-frontend-domain.onrender.com" // Replace with your actual frontend URL
+                "https://your-frontend-domain.onrender.com"
             )
             .AllowAnyMethod()
             .AllowAnyHeader()
@@ -121,19 +79,11 @@ builder.Services.AddCors(options =>
         });
 });
 
-// ============================================
-// REGISTER SERVICES
-// ============================================
 builder.Services.AddScoped<LeakOsintService>();
 
-// ============================================
-// BUILD APP
-// ============================================
 var app = builder.Build();
 
-// ============================================
-// CONFIGURE PIPELINE
-// ============================================
+// Configure pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -145,41 +95,7 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 
-// ============================================
-// DATABASE MIGRATION WITH ERROR HANDLING
-// ============================================
-try
-{
-    using (var scope = app.Services.CreateScope())
-    {
-        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-        // Test the connection first
-        var canConnect = await dbContext.Database.CanConnectAsync();
-        if (canConnect)
-        {
-            Console.WriteLine("✅ Database connection successful!");
-
-            // Apply migrations
-            await dbContext.Database.MigrateAsync();
-            Console.WriteLine("✅ Migrations applied successfully!");
-        }
-        else
-        {
-            Console.WriteLine("❌ Cannot connect to database. Check your connection string.");
-        }
-    }
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"❌ Migration/Connection error: {ex.Message}");
-    Console.WriteLine($"Inner exception: {ex.InnerException?.Message}");
-    // Continue anyway - the app might work with existing schema
-}
-
-// ============================================
-// ADD FALLBACK HEALTH CHECK ENDPOINT
-// ============================================
+// Health check
 app.MapGet("/health", async (IServiceProvider services) =>
 {
     try
@@ -197,8 +113,10 @@ app.MapGet("/health", async (IServiceProvider services) =>
     }
     catch (Exception ex)
     {
-        // Return a 500 status code with a simple object
-        return Results.StatusCode(500);
+        return Results.Json(
+            new { status = "error", error = ex.Message },
+            statusCode: 500
+        );
     }
 });
 
