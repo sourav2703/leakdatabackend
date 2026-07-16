@@ -218,19 +218,6 @@
           "query": {
             "type": "string",
             "nullable": true
-          },
-          "queryType": {
-            "type": "string",
-            "nullable": true
-          },
-          "limit": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "lang": {
-            "type": "string",
-            "nullable": true
           }
         },
         "additionalProperties": false

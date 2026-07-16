@@ -52,9 +52,6 @@ namespace YourApp.Models
     public class SearchRequest
     {
         public string Query { get; set; } = string.Empty;
-        public string? QueryType { get; set; }
-        public int? Limit { get; set; } = 100;
-        public string? Lang { get; set; } = "en";
     }
 
     public class MultipleSearchRequest

@@ -36,15 +36,12 @@ namespace YourApp.Controllers
 
                 var queryType = DetectQueryType(request.Query);
 
-                if (!string.IsNullOrEmpty(request.QueryType))
-                {
-                    queryType = request.QueryType;
-                }
+               
 
                 var result = await _leakService.SearchAndSaveAsync(
                     request.Query,
-                    request.Limit ?? 100,
-                    request.Lang ?? "en"
+                    "en",
+                    100
                 );
 
                 return Ok(result);
@@ -263,9 +260,6 @@ namespace YourApp.Controllers
     public class SearchRequest
     {
         public string Query { get; set; } = string.Empty;
-        public string? QueryType { get; set; }
-        public int? Limit { get; set; } = 100;
-        public string? Lang { get; set; } = "en";
     }
 
     public class MultipleSearchRequest

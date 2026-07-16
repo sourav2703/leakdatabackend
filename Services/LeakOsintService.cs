@@ -28,7 +28,7 @@ namespace YourApp.Services
                 throw new InvalidOperationException("LeakOSINT API URL not configured");
         }
 
-        public async Task<object> SearchAndSaveAsync(string query, int limit = 100, string lang = "en")
+        public async Task<object> SearchAndSaveAsync(string query, string lang = "en", int limit = 100)
         {
             // Use execution strategy with generic type
             var strategy = _dbContext.Database.CreateExecutionStrategy();
