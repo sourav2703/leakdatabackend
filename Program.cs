@@ -50,7 +50,7 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddScoped<LeakOsintService>();
-
+AppContext.SetSwitch("System.Net.Dns.EnableDnsResolutionCache", false);
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
