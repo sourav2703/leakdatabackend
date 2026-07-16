@@ -24,7 +24,6 @@ var configuration = new ConfigurationBuilder()
 // Update connection string with environment variable if available
 if (!string.IsNullOrEmpty(supabaseConnectionString))
 {
-    // Replace placeholder or use directly
     builder.Configuration["ConnectionStrings:Supabase"] = supabaseConnectionString;
 }
 
@@ -32,6 +31,33 @@ if (!string.IsNullOrEmpty(leakOsintToken))
 {
     builder.Configuration["LeakOsint:Token"] = leakOsintToken;
 }
+
+// ============================================
+// ADD CORS - MUST BE BEFORE ANY OTHER SERVICES
+// ============================================
+builder.Services.AddCors(options =>
+{
+    // For development - allow all
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+
+    // For production - specific origins
+    options.AddPolicy("AllowSpecificOrigins", policy =>
+    {
+        policy.WithOrigins(
+            "http://localhost:4200",                    // Local development
+            "http://localhost:3000",                    // Alternative local port
+            "https://leak-data-ocean.netlify.app"    // Your Netlify app
+        )
+        .AllowAnyMethod()
+        .AllowAnyHeader()
+        .AllowCredentials();  // If you're using cookies/auth
+    });
+});
 
 // ============================================
 // REST OF YOUR PROGRAM.CS CODE
@@ -63,25 +89,21 @@ builder.Services.AddHttpClient<LeakOsintService>(client =>
     client.Timeout = TimeSpan.FromMinutes(5);
 });
 
-// CORS
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAngularApp",
-        policy =>
-        {
-            policy.WithOrigins(
-                "http://localhost:4200",
-                "https://your-frontend-domain.onrender.com"
-            )
-            .AllowAnyMethod()
-            .AllowAnyHeader()
-            .AllowCredentials();
-        });
-});
-
 builder.Services.AddScoped<LeakOsintService>();
 
 var app = builder.Build();
+
+// ============================================
+// USE CORS - IMPORTANT: Must be BEFORE UseAuthorization and MapControllers
+// ============================================
+if (app.Environment.IsDevelopment())
+{
+    app.UseCors("AllowAll");
+}
+else
+{
+    app.UseCors("AllowSpecificOrigins");
+}
 
 // Configure pipeline
 if (app.Environment.IsDevelopment())
@@ -90,7 +112,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseCors("AllowAngularApp");
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
