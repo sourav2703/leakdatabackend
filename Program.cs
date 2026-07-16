@@ -5,23 +5,46 @@ using YourApp.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // ============================================
+// LOAD CONFIGURATION - Make appsettings.json optional
+// ============================================
+var configurationBuilder = new ConfigurationBuilder()
+    .SetBasePath(Directory.GetCurrentDirectory())
+    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)  // Changed to optional
+    .AddEnvironmentVariables();  // Environment variables take precedence
+
+var configuration = configurationBuilder.Build();
+
+// ============================================
 // LOAD SECRETS FROM ENVIRONMENT VARIABLES
 // ============================================
 
 // Read from environment variables first, fallback to config
 var leakOsintToken = Environment.GetEnvironmentVariable("LEAKOSINT_TOKEN") ??
-                    builder.Configuration["LeakOsint:Token"];
+                    configuration["LeakOsint:Token"];
+
+var leakOsintApiUrl = Environment.GetEnvironmentVariable("LEAKOSINT_API_URL") ??
+                     configuration["LeakOsint:ApiUrl"] ??
+                     "https://leakosintapi.com/";
 
 var supabaseConnectionString = Environment.GetEnvironmentVariable("SUPABASE_CONNECTION_STRING") ??
-                               builder.Configuration.GetConnectionString("Supabase");
+                               configuration.GetConnectionString("Supabase");
 
-// Build configuration
-var configuration = new ConfigurationBuilder()
-    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-    .AddEnvironmentVariables()
-    .Build();
+// ============================================
+// VALIDATE REQUIRED CONFIGURATION
+// ============================================
+if (string.IsNullOrEmpty(supabaseConnectionString))
+{
+    Console.WriteLine("⚠️ WARNING: SUPABASE_CONNECTION_STRING environment variable is not set!");
+    Console.WriteLine("⚠️ The application will not function correctly without it.");
+}
 
-// Update connection string with environment variable if available
+if (string.IsNullOrEmpty(leakOsintToken))
+{
+    Console.WriteLine("⚠️ WARNING: LEAKOSINT_TOKEN environment variable is not set!");
+    Console.WriteLine("⚠️ The application will not function correctly without it.");
+}
+
+// Override builder configuration with environment variables
 if (!string.IsNullOrEmpty(supabaseConnectionString))
 {
     builder.Configuration["ConnectionStrings:Supabase"] = supabaseConnectionString;
@@ -30,6 +53,11 @@ if (!string.IsNullOrEmpty(supabaseConnectionString))
 if (!string.IsNullOrEmpty(leakOsintToken))
 {
     builder.Configuration["LeakOsint:Token"] = leakOsintToken;
+}
+
+if (!string.IsNullOrEmpty(leakOsintApiUrl))
+{
+    builder.Configuration["LeakOsint:ApiUrl"] = leakOsintApiUrl;
 }
 
 // ============================================
@@ -49,13 +77,15 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowSpecificOrigins", policy =>
     {
         policy.WithOrigins(
-            "http://localhost:4200",                    // Local development
-            "http://localhost:3000",                    // Alternative local port
-            "https://leak-data-ocean.netlify.app"    // Your Netlify app
+            "http://localhost:4200",
+            "http://localhost:3000",
+            "https://leak-data-ocean.netlify.app",
+            "https://*.netlify.app",
+            "https://your-frontend-domain.onrender.com"
         )
         .AllowAnyMethod()
         .AllowAnyHeader()
-        .AllowCredentials();  // If you're using cookies/auth
+        .AllowCredentials();
     });
 });
 
@@ -67,11 +97,16 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Configure DbContext
-var connectionString = builder.Configuration.GetConnectionString("Supabase") ??
-    throw new InvalidOperationException("Supabase connection string not configured");
+if (string.IsNullOrEmpty(supabaseConnectionString))
+{
+    throw new InvalidOperationException(
+        "Supabase connection string not configured. " +
+        "Please set the SUPABASE_CONNECTION_STRING environment variable."
+    );
+}
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString, npgsqlOptions =>
+    options.UseNpgsql(supabaseConnectionString, npgsqlOptions =>
     {
         npgsqlOptions.EnableRetryOnFailure(
             maxRetryCount: 5,
@@ -84,7 +119,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // Configure HttpClient
 builder.Services.AddHttpClient<LeakOsintService>(client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["LeakOsint:ApiUrl"] ?? "https://leakosintapi.com/");
+    client.BaseAddress = new Uri(leakOsintApiUrl);
     client.DefaultRequestHeaders.Add("User-Agent", "LeakOSINT-App/1.0");
     client.Timeout = TimeSpan.FromMinutes(5);
 });
@@ -129,7 +164,8 @@ app.MapGet("/health", async (IServiceProvider services) =>
         {
             status = canConnect ? "healthy" : "unhealthy",
             database = canConnect ? "connected" : "disconnected",
-            timestamp = DateTime.UtcNow
+            timestamp = DateTime.UtcNow,
+            environment = app.Environment.EnvironmentName
         });
     }
     catch (Exception ex)
