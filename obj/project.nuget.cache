@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "sfD7UfdEVuY=",
+  "dgSpecHash": "fJ+BoKqRRhg=",
   "success": true,
   "projectFilePath": "E:\\Practice\\dataleaaka\\WebApplication1\\WebApplication1\\WebApplication1.csproj",
   "expectedPackageFiles": [
@@ -16,6 +16,7 @@
     "C:\\Users\\hp\\.nuget\\packages\\microsoft.entityframeworkcore.analyzers\\8.0.22\\microsoft.entityframeworkcore.analyzers.8.0.22.nupkg.sha512",
     "C:\\Users\\hp\\.nuget\\packages\\microsoft.entityframeworkcore.design\\8.0.22\\microsoft.entityframeworkcore.design.8.0.22.nupkg.sha512",
     "C:\\Users\\hp\\.nuget\\packages\\microsoft.entityframeworkcore.relational\\8.0.22\\microsoft.entityframeworkcore.relational.8.0.22.nupkg.sha512",
+    "C:\\Users\\hp\\.nuget\\packages\\microsoft.entityframeworkcore.tools\\8.0.22\\microsoft.entityframeworkcore.tools.8.0.22.nupkg.sha512",
     "C:\\Users\\hp\\.nuget\\packages\\microsoft.extensions.apidescription.server\\6.0.5\\microsoft.extensions.apidescription.server.6.0.5.nupkg.sha512",
     "C:\\Users\\hp\\.nuget\\packages\\microsoft.extensions.caching.abstractions\\8.0.0\\microsoft.extensions.caching.abstractions.8.0.0.nupkg.sha512",
     "C:\\Users\\hp\\.nuget\\packages\\microsoft.extensions.caching.memory\\8.0.1\\microsoft.extensions.caching.memory.8.0.1.nupkg.sha512",

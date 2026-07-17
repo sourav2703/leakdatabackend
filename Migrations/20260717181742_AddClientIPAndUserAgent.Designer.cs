@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace WebApplication1.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260714133310_InitialCreat2e")]
-    partial class InitialCreat2e
+    [Migration("20260717181742_AddClientIPAndUserAgent")]
+    partial class AddClientIPAndUserAgent
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -106,6 +106,9 @@ namespace WebApplication1.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("ClientIP")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -117,6 +120,7 @@ namespace WebApplication1.Migrations
                         .HasColumnName("error_message");
 
                     b.Property<string>("Language")
+                        .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("language");
 
@@ -138,6 +142,9 @@ namespace WebApplication1.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("status");
+
+                    b.Property<string>("UserAgent")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
