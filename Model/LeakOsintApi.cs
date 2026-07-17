@@ -13,15 +13,14 @@ namespace YourApp.Models
         public string Query { get; set; } = string.Empty;
         public string QueryType { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
+        public int Limit { get; set; }
+        public string Language { get; set; } = string.Empty;
+        public string? ClientIP { get; set; }  // Add this
+        public string? UserAgent { get; set; }  // Add this
+        public DateTime CreatedAt { get; set; }
         public string? ErrorMessage { get; set; }
-        public int Limit { get; set; } = 100;
-        public string? Language { get; set; } = "en";
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
-        // Navigation property
         public ICollection<Database> Databases { get; set; } = new List<Database>();
     }
-
     public class Database
     {
         public long Id { get; set; }

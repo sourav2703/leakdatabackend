@@ -13,15 +13,49 @@ namespace YourApp.Controllers
         private readonly LeakOsintService _leakService;
         private readonly AppDbContext _dbContext;
         private readonly ILogger<LeakController> _logger;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
         public LeakController(
             LeakOsintService leakService,
             AppDbContext dbContext,
-            ILogger<LeakController> logger)
+            ILogger<LeakController> logger,
+            IHttpContextAccessor httpContextAccessor)
         {
             _leakService = leakService;
             _dbContext = dbContext;
             _logger = logger;
+            _httpContextAccessor = httpContextAccessor;
+        }
+
+        // Helper method to get client IP
+        private string GetClientIP()
+        {
+            var context = _httpContextAccessor.HttpContext;
+            if (context == null) return "Unknown";
+
+            // Check for forwarded IP (when behind proxy/load balancer)
+            var forwardedHeader = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(forwardedHeader))
+            {
+                // Get the first IP in the chain (client IP)
+                return forwardedHeader.Split(',')[0].Trim();
+            }
+
+            // Check X-Real-IP
+            var realIP = context.Request.Headers["X-Real-IP"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(realIP))
+            {
+                return realIP;
+            }
+
+            // Fallback to connection remote IP
+            return context.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+        }
+
+        // Helper method to get User Agent
+        private string GetUserAgent()
+        {
+            return _httpContextAccessor.HttpContext?.Request.Headers["User-Agent"].ToString() ?? "Unknown";
         }
 
         [HttpPost("search")]
@@ -34,14 +68,18 @@ namespace YourApp.Controllers
                     return BadRequest(new { error = "Query is required" });
                 }
 
-                var queryType = DetectQueryType(request.Query);
+                var clientIP = GetClientIP();
+                var userAgent = GetUserAgent();
+                _logger.LogInformation($"Search '{request.Query}' from IP: {clientIP}, UserAgent: {userAgent}");
 
-               
+                var queryType = DetectQueryType(request.Query);
 
                 var result = await _leakService.SearchAndSaveAsync(
                     request.Query,
                     "en",
-                    100
+                    100,
+                    clientIP,
+                    userAgent
                 );
 
                 return Ok(result);
@@ -53,36 +91,45 @@ namespace YourApp.Controllers
             }
         }
 
-        [HttpPost("search-multiple")]
-        public async Task<IActionResult> SearchMultiple([FromBody] MultipleSearchRequest request)
-        {
-            try
-            {
-                if (request.Queries == null || !request.Queries.Any())
-                {
-                    return BadRequest(new { error = "At least one query is required" });
-                }
+        //[HttpPost("search-multiple")]
+        //public async Task<IActionResult> SearchMultiple([FromBody] MultipleSearchRequest request)
+        //{
+        //    try
+        //    {
+        //        if (request.Queries == null || !request.Queries.Any())
+        //        {
+        //            return BadRequest(new { error = "At least one query is required" });
+        //        }
 
-                var result = await _leakService.SearchMultipleAsync(
-                    request.Queries,
-                    request.Limit ?? 100,
-                    request.Lang ?? "en"
-                );
+        //        var clientIP = GetClientIP();
+        //        var userAgent = GetUserAgent();
+        //        _logger.LogInformation($"Multiple search from IP: {clientIP}, UserAgent: {userAgent}");
 
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in multiple search endpoint");
-                return StatusCode(500, new { error = "An error occurred while processing your request" });
-            }
-        }
+        //        var result = await _leakService.SearchMultipleAsync(
+        //            request.Queries,
+        //            request.Limit ?? 100,
+        //            request.Lang ?? "en",
+        //            clientIP,
+        //            userAgent
+        //        );
+
+        //        return Ok(result);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Error in multiple search endpoint");
+        //        return StatusCode(500, new { error = "An error occurred while processing your request" });
+        //    }
+        //}
 
         [HttpGet("history")]
         public async Task<IActionResult> GetHistory([FromQuery] int limit = 50)
         {
             try
             {
+                var clientIP = GetClientIP();
+                _logger.LogInformation($"GetHistory called from IP: {clientIP}");
+
                 var history = await _dbContext.Searches
                     .OrderByDescending(s => s.CreatedAt)
                     .Take(limit)
@@ -95,6 +142,8 @@ namespace YourApp.Controllers
                         s.Limit,
                         s.Language,
                         s.CreatedAt,
+                        s.ClientIP,
+                        s.UserAgent,
                         DatabaseCount = s.Databases.Count
                     })
                     .ToListAsync();
@@ -113,6 +162,9 @@ namespace YourApp.Controllers
         {
             try
             {
+                var clientIP = GetClientIP();
+                _logger.LogInformation($"GetFullHistory called from IP: {clientIP}");
+
                 // First get the data with includes
                 var searches = await _dbContext.Searches
                     .Include(s => s.Databases)
@@ -131,6 +183,8 @@ namespace YourApp.Controllers
                     s.Limit,
                     s.Language,
                     s.CreatedAt,
+                    s.ClientIP,
+                    s.UserAgent,
                     DatabaseCount = s.Databases.Count,
                     Databases = s.Databases.Select(d => new
                     {
@@ -164,6 +218,9 @@ namespace YourApp.Controllers
         {
             try
             {
+                var clientIP = GetClientIP();
+                _logger.LogInformation($"GetSearchResult {id} called from IP: {clientIP}");
+
                 var search = await _dbContext.Searches
                     .Include(s => s.Databases)
                         .ThenInclude(d => d.Records)
@@ -210,6 +267,9 @@ namespace YourApp.Controllers
         {
             try
             {
+                var clientIP = GetClientIP();
+                _logger.LogInformation($"GetStats called from IP: {clientIP}");
+
                 var totalSearches = await _dbContext.Searches.CountAsync();
                 var completedSearches = await _dbContext.Searches.CountAsync(s => s.Status == "completed");
                 var failedSearches = await _dbContext.Searches.CountAsync(s => s.Status == "failed");
@@ -237,6 +297,22 @@ namespace YourApp.Controllers
                 _logger.LogError(ex, "Error fetching stats");
                 return StatusCode(500, new { error = "Failed to fetch stats" });
             }
+        }
+
+        [HttpGet("client-info")]
+        public IActionResult GetClientInfo()
+        {
+            var ip = GetClientIP();
+            var userAgent = GetUserAgent();
+            var referer = Request.Headers["Referer"].ToString();
+
+            return Ok(new
+            {
+                ip = ip,
+                userAgent = userAgent,
+                referer = referer,
+                timestamp = DateTime.UtcNow
+            });
         }
 
         private string DetectQueryType(string query)

@@ -90,13 +90,20 @@ builder.Services.AddCors(options =>
 });
 
 // ============================================
-// REST OF YOUR PROGRAM.CS CODE
+// ADD SERVICES
 // ============================================
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Configure DbContext
+// ============================================
+// ADD HTTP CONTEXT ACCESSOR (for IP tracking)
+// ============================================
+builder.Services.AddHttpContextAccessor();
+
+// ============================================
+// CONFIGURE DBCONTEXT
+// ============================================
 if (string.IsNullOrEmpty(supabaseConnectionString))
 {
     throw new InvalidOperationException(
@@ -116,7 +123,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         npgsqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
     }));
 
-// Configure HttpClient
+// ============================================
+// CONFIGURE HTTP CLIENT
+// ============================================
 builder.Services.AddHttpClient<LeakOsintService>(client =>
 {
     client.BaseAddress = new Uri(leakOsintApiUrl);
@@ -124,8 +133,14 @@ builder.Services.AddHttpClient<LeakOsintService>(client =>
     client.Timeout = TimeSpan.FromMinutes(5);
 });
 
+// ============================================
+// REGISTER SERVICES
+// ============================================
 builder.Services.AddScoped<LeakOsintService>();
 
+// ============================================
+// BUILD APP
+// ============================================
 var app = builder.Build();
 
 // ============================================
@@ -140,7 +155,9 @@ else
     app.UseCors("AllowSpecificOrigins");
 }
 
-// Configure pipeline
+// ============================================
+// CONFIGURE PIPELINE
+// ============================================
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -151,7 +168,9 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 
-// Health check
+// ============================================
+// HEALTH CHECK ENDPOINT
+// ============================================
 app.MapGet("/health", async (IServiceProvider services) =>
 {
     try
@@ -175,6 +194,42 @@ app.MapGet("/health", async (IServiceProvider services) =>
             statusCode: 500
         );
     }
+});
+
+// ============================================
+// CLIENT INFO ENDPOINT (for debugging IP tracking)
+// ============================================
+app.MapGet("/client-info", (HttpContext context) =>
+{
+    var forwardedHeader = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+    var clientIP = "Unknown";
+
+    if (!string.IsNullOrEmpty(forwardedHeader))
+    {
+        clientIP = forwardedHeader.Split(',')[0].Trim();
+    }
+    else
+    {
+        var realIP = context.Request.Headers["X-Real-IP"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(realIP))
+        {
+            clientIP = realIP;
+        }
+        else
+        {
+            clientIP = context.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+        }
+    }
+
+    return Results.Ok(new
+    {
+        ip = clientIP,
+        userAgent = context.Request.Headers["User-Agent"].ToString(),
+        forwardedFor = context.Request.Headers["X-Forwarded-For"].ToString(),
+        realIP = context.Request.Headers["X-Real-IP"].ToString(),
+        remoteIP = context.Connection.RemoteIpAddress?.ToString(),
+        timestamp = DateTime.UtcNow
+    });
 });
 
 app.Run();

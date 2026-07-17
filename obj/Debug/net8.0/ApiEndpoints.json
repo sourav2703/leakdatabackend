@@ -1,6 +1,16 @@
 [
   {
     "ContainingType": "YourApp.Controllers.LeakController",
+    "Method": "GetClientInfo",
+    "RelativePath": "api/client-info",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "YourApp.Controllers.LeakController",
     "Method": "GetHistory",
     "RelativePath": "api/history",
     "HttpMethod": "GET",
@@ -65,22 +75,6 @@
   },
   {
     "ContainingType": "YourApp.Controllers.LeakController",
-    "Method": "SearchMultiple",
-    "RelativePath": "api/search-multiple",
-    "HttpMethod": "POST",
-    "IsController": true,
-    "Order": 0,
-    "Parameters": [
-      {
-        "Name": "request",
-        "Type": "YourApp.Controllers.MultipleSearchRequest",
-        "IsRequired": true
-      }
-    ],
-    "ReturnTypes": []
-  },
-  {
-    "ContainingType": "YourApp.Controllers.LeakController",
     "Method": "GetStats",
     "RelativePath": "api/stats",
     "HttpMethod": "GET",
@@ -92,6 +86,22 @@
   {
     "ContainingType": "Program\u002B\u003C\u003Ec",
     "Method": "\u003C\u003CMain\u003E$\u003Eb__0_4",
+    "RelativePath": "client-info",
+    "HttpMethod": "GET",
+    "IsController": false,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": [
+      {
+        "Type": "System.Void",
+        "MediaTypes": [],
+        "StatusCode": 200
+      }
+    ]
+  },
+  {
+    "ContainingType": "Program\u002B\u003C\u003Ec__DisplayClass0_0",
+    "Method": "\u003C\u003CMain\u003E$\u003Eb__3",
     "RelativePath": "health",
     "HttpMethod": "GET",
     "IsController": false,

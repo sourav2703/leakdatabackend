@@ -28,9 +28,8 @@ namespace YourApp.Services
                 throw new InvalidOperationException("LeakOSINT API URL not configured");
         }
 
-        public async Task<object> SearchAndSaveAsync(string query, string lang = "en", int limit = 100)
+        public async Task<object> SearchAndSaveAsync(string query, string lang = "en", int limit = 100, string clientIP = "Unknown", string userAgent = "Unknown")
         {
-            // Use execution strategy with generic type
             var strategy = _dbContext.Database.CreateExecutionStrategy();
 
             return await strategy.ExecuteAsync<object>(async () =>
@@ -39,7 +38,7 @@ namespace YourApp.Services
 
                 try
                 {
-                    // Prepare request data as per LeakOSINT API documentation
+                    // Prepare request data
                     var requestData = new
                     {
                         token = _token,
@@ -50,34 +49,34 @@ namespace YourApp.Services
                     var jsonRequest = JsonSerializer.Serialize(requestData);
                     var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
 
-                    // POST request to LeakOSINT API
                     var response = await _httpClient.PostAsync(_apiUrl, content);
                     response.EnsureSuccessStatusCode();
 
                     var jsonResponse = await response.Content.ReadAsStringAsync();
                     var leakData = JsonSerializer.Deserialize<LeakOSINTResponse>(jsonResponse);
 
-                    // Check for errors
                     if (leakData?.ErrorCode != null)
                     {
                         _logger.LogError("LeakOSINT API Error: {ErrorCode}", leakData.ErrorCode);
                         return new { success = false, error = leakData.ErrorCode };
                     }
 
-                    // Check if we have data
                     if (leakData?.List == null || !leakData.List.Any())
                     {
                         _logger.LogWarning("No data found for query: {Query}", query);
                         return new { success = false, message = "No results found" };
                     }
 
-                    // Create and save Search
+                    // Create and save Search with IP and UserAgent
                     var search = new Search
                     {
                         Query = query,
                         Status = "completed",
                         Limit = limit,
-                        Language = lang
+                        Language = lang,
+                        ClientIP = clientIP,
+                        UserAgent = userAgent,
+                        CreatedAt = DateTime.UtcNow
                     };
 
                     await _dbContext.Searches.AddAsync(search);
@@ -89,7 +88,6 @@ namespace YourApp.Services
                         var databaseName = databaseEntry.Key;
                         var databaseData = databaseEntry.Value;
 
-                        // Create Database entity
                         var database = new Database
                         {
                             SearchId = search.Id,
@@ -101,7 +99,6 @@ namespace YourApp.Services
                         await _dbContext.Databases.AddAsync(database);
                         await _dbContext.SaveChangesAsync();
 
-                        // Create Records
                         if (databaseData.Data != null && databaseData.Data.Any())
                         {
                             var records = databaseData.Data.Select(record => new Record
@@ -117,7 +114,7 @@ namespace YourApp.Services
                     await _dbContext.SaveChangesAsync();
                     await transaction.CommitAsync();
 
-                    _logger.LogInformation("Successfully saved search results for: {Query}", query);
+                    _logger.LogInformation($"Successfully saved search results for: {query} from IP: {clientIP}");
 
                     return new
                     {
@@ -129,7 +126,7 @@ namespace YourApp.Services
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error processing LeakOSINT search for: {Query}", query);
+                    _logger.LogError(ex, $"Error processing LeakOSINT search for: {query}");
 
                     try
                     {
@@ -139,7 +136,10 @@ namespace YourApp.Services
                             Status = "failed",
                             ErrorMessage = ex.Message,
                             Limit = limit,
-                            Language = lang
+                            Language = lang,
+                            ClientIP = clientIP,
+                            UserAgent = userAgent,
+                            CreatedAt = DateTime.UtcNow
                         };
 
                         await _dbContext.Searches.AddAsync(errorSearch);
@@ -155,75 +155,78 @@ namespace YourApp.Services
             });
         }
 
-        public async Task<object> SearchMultipleAsync(List<string> queries, int limit = 100, string lang = "en")
-        {
-            var strategy = _dbContext.Database.CreateExecutionStrategy();
+        //public async Task<object> SearchMultipleAsync(List<string> queries, int limit = 100, string lang = "en", string clientIP = "Unknown", string userAgent = "Unknown")
+        //{
+        //    var strategy = _dbContext.Database.CreateExecutionStrategy();
 
-            return await strategy.ExecuteAsync<object>(async () =>
-            {
-                await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+        //    return await strategy.ExecuteAsync<object>(async () =>
+        //    {
+        //        await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
-                try
-                {
-                    var combinedQuery = string.Join("\n", queries);
+        //        try
+        //        {
+        //            var combinedQuery = string.Join("\n", queries);
 
-                    var requestData = new
-                    {
-                        token = _token,
-                        request = combinedQuery,
-                        limit = limit,
-                        lang = lang,
-                        type = "json"
-                    };
+        //            var requestData = new
+        //            {
+        //                token = _token,
+        //                request = combinedQuery,
+        //                limit = limit,
+        //                lang = lang,
+        //                type = "json"
+        //            };
 
-                    var jsonRequest = JsonSerializer.Serialize(requestData);
-                    var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
+        //            var jsonRequest = JsonSerializer.Serialize(requestData);
+        //            var content = new StringContent(jsonRequest, Encoding.UTF8, "application/json");
 
-                    var response = await _httpClient.PostAsync(_apiUrl, content);
-                    response.EnsureSuccessStatusCode();
+        //            var response = await _httpClient.PostAsync(_apiUrl, content);
+        //            response.EnsureSuccessStatusCode();
 
-                    var jsonResponse = await response.Content.ReadAsStringAsync();
-                    var leakData = JsonSerializer.Deserialize<LeakOSINTResponse>(jsonResponse);
+        //            var jsonResponse = await response.Content.ReadAsStringAsync();
+        //            var leakData = JsonSerializer.Deserialize<LeakOSINTResponse>(jsonResponse);
 
-                    if (leakData?.ErrorCode != null)
-                    {
-                        return new { success = false, error = leakData.ErrorCode } as object;
-                    }
+        //            if (leakData?.ErrorCode != null)
+        //            {
+        //                return new { success = false, error = leakData.ErrorCode } as object;
+        //            }
 
-                    var results = new List<object>();
-                    foreach (var query in queries)
-                    {
-                        var search = new Search
-                        {
-                            Query = query,
-                            QueryType = "multiple",
-                            Status = "completed",
-                            Limit = limit,
-                            Language = lang
-                        };
+        //            var results = new List<object>();
+        //            foreach (var query in queries)
+        //            {
+        //                var search = new Search
+        //                {
+        //                    Query = query,
+        //                    QueryType = "multiple",
+        //                    Status = "completed",
+        //                    Limit = limit,
+        //                    Language = lang,
+        //                    ClientIP = clientIP,
+        //                    UserAgent = userAgent,
+        //                    CreatedAt = DateTime.UtcNow
+        //                };
 
-                        await _dbContext.Searches.AddAsync(search);
-                        await _dbContext.SaveChangesAsync();
-                        results.Add(new { query, searchId = search.Id });
-                    }
+        //                await _dbContext.Searches.AddAsync(search);
+        //                await _dbContext.SaveChangesAsync();
+        //                results.Add(new { query, searchId = search.Id });
+        //            }
 
-                    await _dbContext.SaveChangesAsync();
-                    await transaction.CommitAsync();
+        //            await _dbContext.SaveChangesAsync();
+        //            await transaction.CommitAsync();
 
-                    return new
-                    {
-                        success = true,
-                        results = results,
-                        data = leakData
-                    } as object;
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error processing multiple LeakOSINT searches");
-                    throw;
-                }
-            });
-        }
+        //            return new
+        //            {
+        //                success = true,
+        //                results = results,
+        //                data = leakData
+        //            } as object;
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            await transaction.RollbackAsync();
+        //            _logger.LogError(ex, "Error processing multiple LeakOSINT searches");
+        //            throw;
+        //        }
+        //    });
+        //}
     }
 }
